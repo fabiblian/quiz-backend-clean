@@ -1,67 +1,81 @@
 package com.wiss.quizbackend.config;
 
+import com.wiss.quizbackend.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Security-Konfiguration für die Applikation.
  *
- * Diese Klasse definiert:
- * - Wie Passwörter gehashed werden (BCrypt)
- * - Welche URLs geschützt sind
- * - CORS und CSRF Einstellungen
+ * @Configuration: Markiert diese Klasse als Configurations-Klasse
+ *                Spring scannt diese beim Start und führt alle @Bean Methoden aus
+ *
+ * @EnableWebSecurity: Aktiviert Spring Security für Web-Requests
+ *                     ohne dies würde Spring Security nicht aktiv werden
  */
-@Configuration  // Spring scannt diese Klasse beim Start
-@EnableWebSecurity  // Aktiviert Spring Security
-
+@Configuration
+@EnableWebSecurity
 public class SecurityConfig {
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    // Constructor injection
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
     /**
-     * PasswordEncoder Bean für BCrypt Hashing.
+     * PasswordEncoder Bean - wird überall in der App verwendet wo Passwörter
+     * gehashed oder verifiziert werden müssen.
      *
-     * Work Factor 12 bedeutet:
-     * - 2^12 = 4096 Hash-Iterationen
-     * - Ca. 250ms pro Passwort auf modernen CPUs
-     * - Guter Kompromiss zwischen Sicherheit und Performance
+     * @Bean: Spring erstellt EINE Instanz und verwendet sie überall
+     *        (Singleton Pattern)
      *
-     * @return BCryptPasswordEncoder mit Stärke 12
+     * @return PasswordEncoder Interface (nicht BCryptPasswordEncoder!)
+     *         Warum? Flexibilität - könnte später zu Argon2 wechseln
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Work Factor: 10-12 ist Standard, 14+ für hochsensible Daten
+        // BCrypt mit Stärke 12
+        // Stärke = 2^12 = 4096 Iterationen
+        // Höher = sicherer aber langsamer (10-12 ist Standard 2024)
         return new BCryptPasswordEncoder(12);
     }
 
     /**
-     * Security Filter Chain Configuration.
-     *
-     * TEMPORÄR: Alle Requests erlauben für Entwicklung
-     * SPÄTER: JWT Authentication hinzufügen
+     * Security Filter Chain - definiert welche URLs geschützt sind
+     * temporär: Alles erlauben (später mit JWT absichern)
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF für REST APIs deaktivieren
-                // (verwenden JWT stattdessen)
-                .csrf(csrf -> csrf.disable())
-
-                // Request Authorization Rules
+                .csrf(csrf -> csrf.disable())  // CSRF für REST APIs deaktivieren
+                // CORS: Cross-Origin Requests erlauben (Frontend auf Port 5173 darf Backend auf 8080 ansprechen)
+                .cors(cors -> cors.configure(http))
                 .authorizeHttpRequests(auth -> auth
-                        // Auth Endpoints müssen öffentlich sein
-                        .requestMatchers("/api/auth/**").permitAll()
-                        // Swagger UI für API Dokumentation
-                        .requestMatchers("/v3/api-docs/**",
-                                "/swagger-ui/**").permitAll()
-                        // TEMPORÄR: Alle anderen Requests erlauben
-                        // TODO: Nach JWT Implementation -> .authenticated()
-                        .anyRequest().permitAll()
-                );
+                        .requestMatchers("/api/auth/**").permitAll()  // Registration/Login öffentlich
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll() // Swagger öffentlich
+                        // GEÄNDERT: Jetzt braucht jeder Request einen gültigen JWT Token!
+                        // Vorher: permitAll() → Jeder durfte alles
+                        // Jetzt: authenticated() → Nur eingeloggte User
+                        .anyRequest().authenticated()
+                )
+                // Stateless Sessions: Spring speichert KEINE Session-Daten
+                // Jeder Request muss JWT Token mitbringen (Token = Ausweis bei jeder Tür zeigen)
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                // NEU: JWT Filter HINZUFÜGEN
+                // der Filter wird VOR dem
+                // UsernamePasswordAuthenticationFilter ausgeführt
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

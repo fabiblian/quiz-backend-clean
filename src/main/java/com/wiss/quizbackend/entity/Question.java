@@ -4,21 +4,21 @@ import jakarta.persistence.*;
 
 import java.util.List;
 
-@Entity                                     // ← "Das wird eine Datenbank-Tabelle"
-@Table(name = "questions")                  // ← "Tabelle soll 'questions' heissen (Optional)"
+@Entity
+@Table(name = "questions")
 public class Question {
 
-    @Id                                    // ← "Das ist der Primary Key"
-    @GeneratedValue(strategy = GenerationType.IDENTITY)  // ← "PostgreSQL macht Auto-Increment"
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 128)  // ← "Spalte darf nicht NULL sein, max 128 Zeichen"
+    @Column(nullable = false, length = 128)
     private String question;
 
-    @Column(name = "correct_answer", nullable = false)  // ← "Spalte heisst 'correct_answer'"
+    @Column(name = "correct_answer", nullable = false)
     private String correctAnswer;
 
-    @ElementCollection                     // ← "Liste wird als separate Tabelle gespeichert"
+    @ElementCollection
     @CollectionTable(name = "question_incorrect_answers", joinColumns = @JoinColumn(name = "question_id"))
     @Column(name = "incorrect_answer")
     private List<String> incorrectAnswers;
@@ -29,45 +29,48 @@ public class Question {
     @Column(nullable = false, length = 32)
     private String difficulty;
 
-    // ✅ DEFAULT CONSTRUCTOR hinzufügen (für JPA/Hibernate):
-    public Question(){}
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "created_by_user_id", nullable = false)
+    private AppUser createdBy;
 
-    /**
-     * Konstruktor ohne ID für neue Fragen
-     * @param question
-     * @param correctAnswer
-     * @param incorrectAnswers
-     * @param category
-     * @param difficulty
-     */
+    public Question() {
+    }
+
+    // Backward-compatible constructor for existing call sites without createdBy.
     public Question(String question, String correctAnswer,
                     List<String> incorrectAnswers, String category,
                     String difficulty) {
+        this(question, correctAnswer, incorrectAnswers, category, difficulty, null);
+    }
+
+    public Question(String question, String correctAnswer,
+                    List<String> incorrectAnswers, String category,
+                    String difficulty, AppUser createdBy) {
         this.question = question;
         this.correctAnswer = correctAnswer;
         this.incorrectAnswers = incorrectAnswers;
         this.category = category;
         this.difficulty = difficulty;
+        this.createdBy = createdBy;
     }
 
-    /**
-     * Konstruktor mit ID um bestehende Fragen zu aktualisieren oder löschen
-     * @param id
-     * @param question
-     * @param correctAnswer
-     * @param incorrectAnswers
-     * @param category
-     * @param difficulty
-     */
+    // Backward-compatible constructor for existing call sites without createdBy.
     public Question(Long id, String question, String correctAnswer,
                     List<String> incorrectAnswers, String category,
                     String difficulty) {
+        this(id, question, correctAnswer, incorrectAnswers, category, difficulty, null);
+    }
+
+    public Question(Long id, String question, String correctAnswer,
+                    List<String> incorrectAnswers, String category,
+                    String difficulty, AppUser createdBy) {
         this.id = id;
         this.question = question;
         this.correctAnswer = correctAnswer;
         this.incorrectAnswers = incorrectAnswers;
         this.category = category;
         this.difficulty = difficulty;
+        this.createdBy = createdBy;
     }
 
     public Long getId() {
@@ -116,5 +119,13 @@ public class Question {
 
     public void setDifficulty(String difficulty) {
         this.difficulty = difficulty;
+    }
+
+    public AppUser getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(AppUser createdBy) {
+        this.createdBy = createdBy;
     }
 }

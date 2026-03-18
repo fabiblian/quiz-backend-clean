@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: quiz_multiuser_postgres
+    environment:
+      POSTGRES_DB: quiz_multiuser
+      POSTGRES_USER: quiz_user
+      POSTGRES_PASSWORD: quiz_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_multiuser_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_multiuser_data:
